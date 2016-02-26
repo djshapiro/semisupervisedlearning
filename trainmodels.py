@@ -1,46 +1,57 @@
 import numpy as np
 from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.datasets import make_blobs
+import matplotlib.pyplot as plt
 
-trainX = np.array([[0, -1], [0, .3], [.3, .3], [-1, -5], [.3, 0], [-1, 0 ], [1, 1], [2, 3]]);
-trainY = np.array([-1, -1, -1, -1, 1, 1, 1, 1]);
+#options
+n_samples = 400
+cluster_std = 3
 
-testX1 = np.array([[-2, -2], [5,5], [0, 0], [-.5, .5], [.5, -.5]])
-testX2 = np.array([[-1, -1], [2,2], [.5, 0], [-1, 2], [-.5, -1]])
+#Define a function for computing the accuracy of our methods
+def computeAccuracy(actual, expected):
+    maximum = len(expected);
+    numCorrect = 0;
+    for ii in range(maximum):
+        if actual[ii] == expected[ii]:
+            numCorrect = numCorrect + 1;
+    return float(numCorrect)/float(maximum);
 
-#Train Naive Bayes Gaussian with test data
+#Create two-feature, two-label data:
+(features, labels) = make_blobs(centers=2, n_samples=n_samples, cluster_std=cluster_std);
+
+#Let's pretend that trainX are the only labeled data...
+trainBoundary = int(n_samples*.1)
+testBoundary = int((n_samples - trainBoundary)/2)
+trainX = features[0:trainBoundary]
+trainY = labels[0:trainBoundary]
+#...in which case, we'd split up the unlabeled data into two parts.
+testX1 = features[trainBoundary: testBoundary]
+testY1 = labels[trainBoundary: testBoundary]
+testX2 = features[testBoundary: n_samples]
+testY2 = labels[testBoundary: n_samples]
+
+#Now let's try some semi-supervised learning.
+#We'll use the official training data to train a Naive Bayes Gaussian model.
+#After training the model, we use it to make guesses about testX1 and testX2.
 gaussLF = GaussianNB();
 gaussLF.fit(trainX, trainY);
 gaussY1 = gaussLF.predict(testX1);
-print("gauss-only Y1", gaussY1);
 gaussY2 = gaussLF.predict(testX2);
-print("gauss-only Y2", gaussY2);
 
-#Train Decision Tree with same test data
+#Now let's use the Gaussian model's guess about the testX1 dataset to train
+#a Decision Tree model.
 treeLF = DecisionTreeClassifier();
-treeLF.fit(trainX, trainY);
-treeY1 = treeLF.predict(testX1);
-print("tree-only Y1", treeY1);
-treeY2 = treeLF.predict(testX2);
-print("tree-only Y2", treeY2);
-
-#Now retrain the Gaussian with the training features and testX2 (using the Tree's predictions as training values)
-gaussLF.fit(np.concatenate([trainX, testX2]), np.concatenate([trainY, treeY2]));
-gaussY1WithX2TrainedTree = gaussLF.predict(testX1);
-print("X2-tree-prediction-trained gauss Y1", gaussY1WithX2TrainedTree);
-
-#Now retrain the Gaussian with the training features and testX1
-gaussLF.fit(np.concatenate([trainX, testX1]), np.concatenate([trainY, treeY1]));
-gaussY2WithX1TrainedTree = gaussLF.predict(testX2);
-print("X1-tree-prediction-trained gauss Y2", gaussY1WithX2TrainedTree);
-
-#Now similarly retrain the decision tree with the training features and testX2
-treeLF.fit(np.concatenate([trainX, testX2]), np.concatenate([trainY, gaussY2]));
-treeY1WithX2TrainedGauss = treeLF.predict(testX1);
-print("X2-gaussian-trained tree Y1", treeY1WithX2TrainedGauss);
-
-#Now similarly retrain the decision tree with the training features and testX1
 treeLF.fit(np.concatenate([trainX, testX1]), np.concatenate([trainY, gaussY1]));
-treeY2WithX1TrainedGauss = treeLF.predict(testX2);
-print("X1-gaussian-trained tree Y2", treeY2WithX1TrainedGauss);
+treeY2 = treeLF.predict(testX2);
+gaussY1Accuracy = "{:.2%}".format(computeAccuracy(gaussY1, testY1))
+gaussY2Accuracy = "{:.2%}".format(computeAccuracy(gaussY2, testY2))
+treeY2Accuracy = "{:.2%}".format(computeAccuracy(treeY2, testY2))
+print("Gaussian's testX1 predictions were this accurate: ", gaussY1Accuracy);
+print("Gaussian's testX2 predictions were this accurate: ", gaussY2Accuracy );
+print("Decision Tree's testX2 predictions were this accurate: ", treeY2Accuracy);
 
+#Graph the points for fun.
+xs, ys = features.T
+plt.plot(xs, ys, 'ro');
+plt.show()
